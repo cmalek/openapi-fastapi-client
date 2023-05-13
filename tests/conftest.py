@@ -28,9 +28,9 @@ def openapi_components(openapi_file) -> dict:
 
 @pytest.fixture(scope="function")
 def example_api(openapi_paths) -> object:
-    from openapi_fastapi_client.api import Api
+    from openapi_fastapi_client.api import ManagerFileGenerator
 
-    return Api(openapi_paths, "http://localhost:8080", "pet")
+    return ManagerFileGenerator(openapi_paths, "http://localhost:8080", "pet")
 
 
 @pytest.fixture(scope="function")

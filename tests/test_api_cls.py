@@ -2,21 +2,21 @@ from pathlib import Path
 
 import pytest
 
-from openapi_fastapi_client.api import Api
+from openapi_fastapi_client.api import ManagerFileGenerator
 
 
 def test_create_api_instance(openapi_paths):
-    api = Api(openapi_paths, "http://localhost:8080", "pet")
-    assert not api.data  # empty on creation
+    api = ManagerFileGenerator(openapi_paths, "http://localhost:8080", "pet")
+    assert not api._file_contents  # empty on creation
     assert not api.schema_imports  # empty on creation
-    assert not api.query_param_schemas  # empty on creation
+    assert not api.schema_classes  # empty on creation
 
     assert api.paths == openapi_paths
     assert api.base_url == "http://localhost:8080"
 
 
 def test_create_api_instance_with_url_ending_with_slash_removes_slash(openapi_paths):
-    api = Api(openapi_paths, "http://localhost:8080/", "pet")
+    api = ManagerFileGenerator(openapi_paths, "http://localhost:8080/", "pet")
     assert api.base_url == "http://localhost:8080"
 
 

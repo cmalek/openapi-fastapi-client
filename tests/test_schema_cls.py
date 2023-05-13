@@ -11,7 +11,7 @@ def test_create_schema_instance(openapi_components):
     schema = Schema(openapi_components)
     assert not schema.data  # empty on creation
     assert not schema.schema_imports  # empty on creation
-    assert not schema.query_param_schemas  # empty on creation
+    assert not schema.schema_definitions  # empty on creation
     assert not schema.enums  # empty on creation
     assert not schema.referenced_class  # empty on creation
 

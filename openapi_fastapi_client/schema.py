@@ -1,6 +1,8 @@
 from operator import itemgetter
 from pathlib import Path
 from string import Template
+from textwrap import wrap
+from typing import Optional
 
 import black
 import isort
@@ -14,23 +16,22 @@ from openapi_fastapi_client.helpers import (
     string_constraints,
 )
 
-
 class Schema:
     __slots__ = (
         "data",
         "components",
         "schema_imports",
         "enums",
-        "query_param_schemas",
+        "schema_definitions",
         "referenced_class",
     )
 
     def __init__(self, components: dict):
-        self.data = []
+        self.data: list[str] = []
         self.components = components
         self.schema_imports = set()
         self.enums = {}
-        self.query_param_schemas = []
+        self.schema_definitions: list[str] = []
         self.referenced_class = set()
 
     def generate_base_imports(self):
@@ -51,11 +52,13 @@ class Schema:
             return enum_name
 
     def create_attribute(self, class_name: str, component: dict):
+        type_hint: Optional[str]
         class_name = function_like_name_to_class_name(class_name)
         class_info = {
             "class_name": class_name,
             "attributes": [],
             "validators": [],
+            "description": component.get("description", ""),
             "index": 0 if class_name in self.referenced_class else 10,
         }
         for name, type_info in component["properties"].items():
@@ -98,7 +101,9 @@ class Schema:
                         ref = function_like_name_to_class_name(reference.split("/")[-1])
                         self.referenced_class.add(ref)
                         class_info["index"] = class_info["index"] + 1
-                        type_hint = f"list[{ref}]"
+                        # put the type hint in quotes to avoid linter errors if the
+                        # referenced class is below us in the file
+                        type_hint = f'"list[{ref}]"'
                     else:
                         type_hint = "list"
                 case "boolean":
@@ -113,6 +118,12 @@ class Schema:
                 case _:
                     type_hint = None
 
+            description = type_info.get("description", "")
+            if description:
+                lines = wrap(description, 79, break_long_words=False)
+                lines = [f"#: {line}" for line in lines]
+                description = "\n    ".join(lines)
+
             if is_optional and type_hint is not None:
                 class_info["attributes"].append(f"{name}{delimiter}Optional[{type_hint}] = None")
                 if not type_info.get("nullable", False):
@@ -123,10 +134,14 @@ class Schema:
                         field_type = type_hint
                     class_info["validators"].append(create_validator(name, field_type))
             elif not is_optional and type_hint is not None:
-                class_info["attributes"].append(f"{name}{delimiter}{type_hint}")
+                attribute_string = f"{name}{delimiter}{type_hint}"
+                if description:
+                    attribute_string = description + "\n    " + attribute_string
+                class_info["attributes"].append(attribute_string)
+
         return class_info
 
-    def generate_schemas(self):
+    def generate(self):
         self.generate_base_imports()
         for key, val in self.components.items():
             self.data.append(self.create_attribute(key, val))
@@ -145,14 +160,20 @@ class Schema:
         validators = "\n".join(data["validators"])
         return Template(
             """class $class_name(BaseModel):
+    $description
     $params
-    
+
     $validators
         """
-        ).substitute(class_name=data["class_name"], params=params, validators=validators)
+        ).substitute(
+            class_name=data["class_name"],
+            description=f'"""\n{data["description"]}\n"""' if data["description"] else "",
+            params=params,
+            validators=validators
+        )
 
-    def write_to_file(self, folder_path: Path, additional_data: list[str] = None):
-        data = []
+    def write(self, path: Path, additional_data: list[str] = None):
+        data: list[str] = []
         data.extend(self.schema_imports)
         data.append("\n")
         if additional_data:
@@ -161,9 +182,10 @@ class Schema:
         data.extend([self.create_enum_class(obj) for obj in self.enums.values()])
         data.append("\n")
         data.extend([self.create_schema_class(obj) for obj in self.data])
+        data.extend(self.schema_definitions)
         text = black.format_str("\n".join(data), mode=black.Mode())
+        #text = "\n".join(data)
 
-        schema_file = folder_path / Path("schema.py")
-        with schema_file as file:
+        with path as file:
             file.write_text(text)
             isort.api.sort_file(file)

@@ -35,6 +35,7 @@ STR_FORMAT = {
     "date": "date",
     "date-time": "datetime",
     "byte": "bytes",
+    "binary": "bytes",
 }
 
 
